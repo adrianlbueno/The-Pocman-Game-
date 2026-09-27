@@ -8,6 +8,7 @@ import {
   resumeSpotify,
   getCurrentSpotifyTrack,
 } from "./Spotify";
+import { contentString } from "./content";
 type Message = {
   role: "user" | "assistant" | "system";
   content: string;
@@ -235,18 +236,6 @@ export default function App() {
     ]);
   };
 
-  // const handleSpotifyNext = async () => {
-  //   await pauseSpotify();
-
-  //   const announcement = "Okay, I'll find you another one.";
-
-  //   await speak(announcement);
-
-  //   await nextSpotifyTrack();
-
-  //   await resumeSpotify();
-  // };
-
   const getAssistantAction = async (text: string): Promise<AssistantAction> => {
     const response = await fetch("http://localhost:11434/api/chat", {
       method: "POST",
@@ -261,110 +250,7 @@ export default function App() {
         messages: [
           {
             role: "system",
-            content: `
-You are an intent classifier for a general-purpose voice assistant.
-
-Your job is ONLY to determine whether the user explicitly wants to control Spotify.
-
-Available actions:
-
-spotify_play
-spotify_next
-spotify_pause
-spotify_resume
-spotify_current
-chat
-
-IMPORTANT RULE:
-
-If the user is NOT clearly asking to control or identify Spotify music,
-you MUST return:
-
-{
-  "type": "chat"
-}
-
-Do NOT assume that ordinary conversation is about music.
-
-Examples:
-
-User: "How are you?"
-{
-  "type": "chat"
-}
-
-User: "Tell me about Ecuador"
-{
-  "type": "chat"
-}
-
-User: "What should I eat tonight?"
-{
-  "type": "chat"
-}
-
-User: "Can you help me with React?"
-{
-  "type": "chat"
-}
-
-User: "I had a difficult day"
-{
-  "type": "chat"
-}
-
-User: "play Bad Bunny"
-{
-  "type": "spotify_play",
-  "query": "Bad Bunny"
-}
-
-User: "put on some bachata"
-{
-  "type": "spotify_play",
-  "query": "bachata"
-}
-
-User: "I want to listen to Romeo Santos"
-{
-  "type": "spotify_play",
-  "query": "Romeo Santos"
-}
-
-User: "skip this song"
-{
-  "type": "spotify_next"
-}
-
-User: "I don't like this track"
-{
-  "type": "spotify_next"
-}
-
-User: "pause the music"
-{
-  "type": "spotify_pause"
-}
-
-User: "resume the music"
-{
-  "type": "spotify_resume"
-}
-
-User: "what song is this?"
-{
-  "type": "spotify_current"
-}
-
-User: "who is singing this?"
-{
-  "type": "spotify_current"
-}
-
-Return ONLY valid JSON.
-Do not answer the user's question.
-Do not perform the action.
-`,
+            content: contentString,
           },
           {
             role: "user",
@@ -374,13 +260,18 @@ Do not perform the action.
       }),
     });
 
+    console.log("response getAssistanceAction", response);
     if (!response.ok) {
       throw new Error(`Intent request failed: ${response.status}`);
     }
 
     const data = await response.json();
 
-    return JSON.parse(data.message.content) as AssistantAction;
+    console.log("data", data);
+
+    const testingJson = JSON.parse(data.message.content) as AssistantAction;
+
+    return testingJson;
   };
 
   const handleSpotifyNext = async () => {
@@ -410,6 +301,8 @@ Do not perform the action.
   const sendMessage = async (textOverride?: string) => {
     const trimmedInput = (textOverride ?? input).trim();
 
+    console.log("trimmedInput", trimmedInput);
+
     if (!trimmedInput || loading) {
       return;
     }
@@ -421,26 +314,20 @@ Do not perform the action.
     switch (action.type) {
       case "spotify_play":
         await handleSpotifyPlay(action.query);
-
         return;
 
       case "spotify_next":
         await handleSpotifyNext();
-
         return;
 
       case "spotify_pause":
         await pauseSpotify();
-
         await speak("Okay, music paused.");
-
         return;
 
       case "spotify_resume":
         await speak("Sure.");
-
         await resumeSpotify();
-
         return;
 
       case "spotify_current": {
@@ -460,7 +347,6 @@ Do not perform the action.
           ]);
 
           await speak(responseText);
-
           return;
         }
 
@@ -475,7 +361,6 @@ Do not perform the action.
         ]);
 
         await speak(responseText);
-
         return;
       }
 
@@ -483,6 +368,7 @@ Do not perform the action.
         break;
     }
 
+    // normal chat continues here
     const nextMessages: Message[] = [
       ...messages,
       {
