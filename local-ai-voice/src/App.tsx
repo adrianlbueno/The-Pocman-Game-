@@ -9,56 +9,13 @@ import {
   getCurrentSpotifyTrack,
 } from "./Spotify";
 import { contentString } from "./content";
-type Message = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
-
-type AssistantAction =
-  | {
-      type: "spotify_play";
-      query: string;
-    }
-  | {
-      type: "spotify_next";
-    }
-  | {
-      type: "spotify_pause";
-    }
-  | {
-      type: "spotify_resume";
-    }
-  | {
-      type: "chat";
-    }
-  | {
-      type: "spotify_current";
-    };
-
-type SpeechRecognitionEvent = Event & {
-  results: {
-    length: number;
-
-    [index: number]: {
-      [index: number]: {
-        transcript: string;
-      };
-    };
-  };
-};
-
-type SpeechRecognitionInstance = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onend: (() => void) | null;
-  onerror: ((event: Event) => void) | null;
-};
-
-type AssistantState = "idle" | "listening" | "thinking" | "speaking";
+import { SYSTEM_PROMPT } from "./content";
+import type {
+  AssistantAction,
+  AssistantState,
+  Message,
+  SpeechRecognitionInstance,
+} from "./type";
 
 declare global {
   interface Window {
@@ -71,21 +28,11 @@ declare global {
   }
 }
 
-const SYSTEM_PROMPT = `
-You are a helpful local AI assistant.
-
-Be concise.
-Be natural.
-Explain technical topics clearly.
-When reviewing code, behave like a senior frontend developer.
-`;
-
 export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const KOKORO_VOICES = [
     { id: "af_heart", label: "Heart" },
     { id: "af_bella", label: "Bella" },
@@ -219,7 +166,7 @@ export default function App() {
   // };
 
   const handleSpotifyPlay = async (query: string) => {
-    await pauseSpotify();
+    console.log("query", query);
 
     const announcement = `Sure, I'm looking for ${query}.`;
 
@@ -236,7 +183,70 @@ export default function App() {
     ]);
   };
 
-  const getAssistantAction = async (text: string): Promise<AssistantAction> => {
+  const getLocalAction = (text: string): AssistantAction | null => {
+    const normalized = text.toLowerCase().trim();
+
+    const nextTrackPatterns = [
+      // Direct
+      /^(play )?(the )?next (song|track)$/,
+      /^next( song| track)?$/,
+      /^skip$/,
+      /^skip (this|the) (song|track)$/,
+
+      // Change
+      /^change (this|the) (song|track)$/,
+      /^change (to )?(a )?(new|different|another) (song|track)$/,
+      /^play (a )?(new|different|another) (song|track)$/,
+
+      // Don't like it
+      /^i (don't|dont|do not) like (this|the) (song|track)$/,
+      /^i (don't|dont|do not) like this$/,
+      /^i hate (this|the) (song|track)$/,
+
+      // Natural commands
+      /^put on something (else|different)$/,
+      /^play something (else|different)$/,
+      /^give me something (else|different)$/,
+      /^another (song|track)$/,
+    ];
+
+    if (nextTrackPatterns.some((pattern) => pattern.test(normalized))) {
+      return { type: "spotify_next" };
+    }
+
+    if (
+      normalized === "pause" ||
+      normalized === "pause music" ||
+      normalized === "pause the music"
+    ) {
+      return { type: "spotify_pause" };
+    }
+
+    if (
+      normalized === "resume" ||
+      normalized === "resume music" ||
+      normalized === "resume the music"
+    ) {
+      return { type: "spotify_resume" };
+    }
+
+    if (
+      normalized === "what song is this" ||
+      normalized === "what is playing" ||
+      normalized === "who is singing this"
+    ) {
+      return { type: "spotify_current" };
+    }
+
+    return null;
+  };
+
+  const getAssistantAction = async (
+    text: string,
+    history: Message[],
+  ): Promise<AssistantAction> => {
+    const recentHistory = history.slice(-6);
+
     const response = await fetch("http://localhost:11434/api/chat", {
       method: "POST",
       headers: {
@@ -252,6 +262,9 @@ export default function App() {
             role: "system",
             content: contentString,
           },
+
+          ...recentHistory,
+
           {
             role: "user",
             content: text,
@@ -260,25 +273,30 @@ export default function App() {
       }),
     });
 
-    console.log("response getAssistanceAction", response);
     if (!response.ok) {
       throw new Error(`Intent request failed: ${response.status}`);
     }
 
     const data = await response.json();
 
-    console.log("data", data);
-
-    const testingJson = JSON.parse(data.message.content) as AssistantAction;
-
-    return testingJson;
+    return JSON.parse(data.message.content) as AssistantAction;
   };
 
   const handleSpotifyNext = async () => {
     try {
-      await pauseSpotify();
+      await nextSpotifyTrack();
 
-      const announcement = "Okay, I'll find you another one.";
+      // Give Spotify a moment to update its playback state
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const currentTrack = await getCurrentSpotifyTrack();
+
+      if (!currentTrack.track) {
+        await speak("I couldn't find the current track.");
+        return;
+      }
+
+      const announcement = `Now playing ${currentTrack.track} by ${currentTrack.artist}.`;
 
       setMessages((current) => [
         ...current,
@@ -289,10 +307,6 @@ export default function App() {
       ]);
 
       await speak(announcement);
-
-      await nextSpotifyTrack();
-
-      await resumeSpotify();
     } catch (error) {
       console.error("Spotify next error:", error);
     }
@@ -307,7 +321,12 @@ export default function App() {
       return;
     }
 
-    const action = await getAssistantAction(trimmedInput);
+    // const action = await getAssistantAction(trimmedInput);
+
+    const localAction = getLocalAction(trimmedInput);
+
+    const action =
+      localAction ?? (await getAssistantAction(trimmedInput, messages));
 
     console.log("action", action);
 
@@ -363,7 +382,8 @@ export default function App() {
         await speak(responseText);
         return;
       }
-
+      case "spotify_keep":
+        return;
       case "chat":
         break;
     }
