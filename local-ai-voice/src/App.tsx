@@ -315,20 +315,14 @@ export default function App() {
   const sendMessage = async (textOverride?: string) => {
     const trimmedInput = (textOverride ?? input).trim();
 
-    console.log("trimmedInput", trimmedInput);
-
     if (!trimmedInput || loading) {
       return;
     }
-
-    // const action = await getAssistantAction(trimmedInput);
 
     const localAction = getLocalAction(trimmedInput);
 
     const action =
       localAction ?? (await getAssistantAction(trimmedInput, messages));
-
-    console.log("action", action);
 
     switch (action.type) {
       case "spotify_play":
@@ -388,7 +382,6 @@ export default function App() {
         break;
     }
 
-    // normal chat continues here
     const nextMessages: Message[] = [
       ...messages,
       {
