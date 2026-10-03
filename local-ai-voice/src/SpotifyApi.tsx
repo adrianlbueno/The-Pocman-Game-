@@ -1,4 +1,4 @@
-type SpotifyPlayResult = {
+type SpotifyProps = {
   playing: boolean;
   track: string;
   artist: string;
@@ -6,9 +6,7 @@ type SpotifyPlayResult = {
   device: string;
 };
 
-export const playSpotify = async (
-  query: string,
-): Promise<SpotifyPlayResult> => {
+export const playSpotify = async (query: string): Promise<SpotifyProps> => {
   const response = await fetch("http://127.0.0.1:8001/spotify/play", {
     method: "POST",
     headers: {

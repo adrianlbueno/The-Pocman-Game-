@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import ReactMarkdown from "react-markdown";
+// import cumbiaImagA from "./assets/enanito-bailan.gif";
 import {
   playSpotify,
   nextSpotifyTrack,
   pauseSpotify,
   resumeSpotify,
   getCurrentSpotifyTrack,
-} from "./Spotify";
+} from "./SpotifyApi";
+
 import { contentString } from "./content";
 import { SYSTEM_PROMPT } from "./content";
 import type {
@@ -609,18 +611,11 @@ export default function App() {
     <main className="app">
       <header className="header">
         <div className="brand">
-          <div className="logo">AI</div>
-
           <div className={`assistantStatus ${assistantState}`}>
             {assistantState === "idle" && "Ready"}
             {assistantState === "listening" && "Listening..."}
             {assistantState === "thinking" && "Thinking..."}
             {assistantState === "speaking" && "Speaking..."}
-          </div>
-
-          <div>
-            {/* <h1>Local AI</h1> */}
-            {/* <p>llama3.2 · Kokoro</p> */}
           </div>
         </div>
 
@@ -721,7 +716,8 @@ export default function App() {
             </div>
 
             <div className="messageContent">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              {/* <img src={cumbiaImagA} alt="Cumbiaaaa" /> */}
+              <ReactMarkdown>message.content</ReactMarkdown>
             </div>
           </article>
         ))}
